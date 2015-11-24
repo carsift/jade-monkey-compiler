@@ -18,14 +18,76 @@
     var jmonkey;
     jmonkey = {
       that: this,
+      methodQ: [],
+      working: false,
       source: (typeof obj.source !== "undefined") && (obj.source != null) ? obj.source : void 0,
       dest: (typeof obj.dest !== "undefined") && (obj.dest != null) ? obj.dest : void 0,
-      compile: function(callback) {
-        console.log('compiling...');
-        return setTimeout(function() {
-          callback();
+      number: 0,
+      add: function(number) {
+        var args;
+        args = arguments;
+        if (jmonkey.working) {
+          jmonkey.addChink('add', arguments);
           return jmonkey;
+        }
+        jmonkey.working = true;
+        jmonkey.number = jmonkey.number + number;
+        setTimeout(function() {
+          if ((typeof args[args.length - 1] !== "undefined") && (typeof args[args.length - 1] === "function")) {
+            args[args.length - 1]();
+          }
+          return jmonkey.nextChink();
         }, 2000);
+        return jmonkey;
+      },
+      equals: function(number) {
+        var args;
+        args = arguments;
+        if (jmonkey.working) {
+          jmonkey.addChink('equals', arguments);
+          return jmonkey;
+        }
+        jmonkey.working = true;
+        console.log(jmonkey.number);
+        setTimeout(function() {
+          if ((typeof args[args.length - 1] !== "undefined") && (typeof args[args.length - 1] === "function")) {
+            args[args.length - 1]();
+          }
+          return jmonkey.nextChink();
+        }, 2000);
+        return jmonkey;
+      },
+      compile: function() {
+        var args;
+        args = arguments;
+        if (jmonkey.working) {
+          jmonkey.addChink('compile', arguments);
+          return jmonkey;
+        }
+        jmonkey.working = true;
+        setTimeout(function() {
+          if (typeof args.length - 1 === 'function') {
+            args[args.length - 1]();
+          }
+          return jmonkey.nextChink();
+        }, 2000);
+        return jmonkey;
+      },
+      addChink: function(method, args) {
+        return jmonkey.methodQ.push({
+          method: method,
+          args: args
+        });
+      },
+      nextChink: function() {
+        var args, methName, nextMeth;
+        jmonkey.working = false;
+        if (jmonkey.methodQ.length > 0) {
+          nextMeth = jmonkey.methodQ.shift();
+          methName = nextMeth.method;
+          args = nextMeth.args;
+          return jmonkey[methName].apply(this, args);
+        }
       }
     };
     return jmonkey;

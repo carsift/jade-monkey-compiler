@@ -2,7 +2,7 @@
   "name": "jade-monkey",
   "version": "1.0.0",
   "description": "a lightweight compiler for jade templating",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "(coffee --compile --output dist --watch src &);"

@@ -15,7 +15,7 @@
   async = require('async');
 
   Jmonkey = function(obj) {
-    var jmonkey;
+    var jmonkey, newj;
     jmonkey = {
       that: this,
       methodQ: [],
@@ -40,7 +40,7 @@
         }, 2000);
         return jmonkey;
       },
-      equals: function(number) {
+      equals: function() {
         var args;
         args = arguments;
         if (jmonkey.working) {
@@ -74,7 +74,7 @@
         return jmonkey;
       },
       addChink: function(method, args) {
-        return jmonkey.methodQ.push({
+        jmonkey.methodQ.push({
           method: method,
           args: args
         });
@@ -86,11 +86,13 @@
           nextMeth = jmonkey.methodQ.shift();
           methName = nextMeth.method;
           args = nextMeth.args;
-          return jmonkey[methName].apply(this, args);
+          jmonkey[methName].apply(this, args);
         }
       }
     };
     return jmonkey;
+    newj = new Jmonkey({});
+    return console.log(newj.prototype);
   };
 
   module.exports = Jmonkey;

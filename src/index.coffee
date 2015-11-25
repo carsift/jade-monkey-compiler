@@ -26,7 +26,7 @@ Jmonkey = (obj) ->
 				jmonkey.nextChink()
 			2000);
 			return jmonkey
-		equals: (number) ->
+		equals: ->
 			args = arguments;
 			if jmonkey.working
 				jmonkey.addChink('equals', arguments)
@@ -55,6 +55,7 @@ Jmonkey = (obj) ->
 
 		addChink: (method, args) ->
 			jmonkey.methodQ.push({method: method, args: args})
+			return
 		nextChink: ->
 			jmonkey.working = false;
 			if jmonkey.methodQ.length>0
@@ -62,10 +63,15 @@ Jmonkey = (obj) ->
 				methName = nextMeth.method
 				args = nextMeth.args
 				jmonkey[methName].apply(this, args)
+			
+			return
 	}
 
 
 
 	return jmonkey
+
+ newj = new Jmonkey({});
+ console.log(newj.prototype)
 
 module.exports = Jmonkey

@@ -1,5 +1,5 @@
 {
-  "name": "jade-monkey",
+  "name": "jade-monkey-compiler",
   "version": "1.0.0",
   "description": "a lightweight compiler for jade templating",
   "main": "dist/index.js",

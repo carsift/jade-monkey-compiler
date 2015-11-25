@@ -9,69 +9,43 @@ Jmonkey = (obj) ->
 	jmonkey = {
 		that: this,
 		methodQ: [],
-		working: false,
-		source: obj.source if((typeof obj.source isnt "undefined") && obj.source?)
-		dest: obj.dest if((typeof obj.dest isnt "undefined") && obj.dest?)
 		number: 0,
-		add: (number) -> 
-			args = arguments;
-			if jmonkey.working
-				jmonkey.addChink('add', arguments)
-				return jmonkey
-			jmonkey.working = true;
-			
-			jmonkey.number = jmonkey.number + number;
-			setTimeout( ->
-				args[args.length-1]() if (typeof args[args.length-1] != "undefined") && (typeof args[args.length-1] == "function")
-				jmonkey.nextChink()
-			2000);
-			return jmonkey
-		equals: ->
-			args = arguments;
-			if jmonkey.working
-				jmonkey.addChink('equals', arguments)
-				return jmonkey
-			jmonkey.working = true;
-			
-			console.log(jmonkey.number)
-			setTimeout( ->
-				args[args.length-1]() if (typeof args[args.length-1] != "undefined") && (typeof args[args.length-1] == "function")
-				jmonkey.nextChink()
-			2000);
+		qStarted: false,
+		
+
+		meth: (number, callback) ->
+			jmonkey.addQ (cb) ->
+				#logic here
+				jmonkey.number = jmonkey.number + number
+				setTimeout(->
+					callback()
+					cb()
+					return
+				100)
+				return 
 			return jmonkey
 
-		compile: () ->
-			args = arguments;
-			if jmonkey.working
-				jmonkey.addChink('compile', arguments)
-				return jmonkey
-			jmonkey.working = true;
-			
-			setTimeout( -> 
-				args[args.length-1]() if (typeof args.length-1 == 'function')
-				jmonkey.nextChink()
-			2000)
-			return jmonkey
-
-		addChink: (method, args) ->
-			jmonkey.methodQ.push({method: method, args: args})
+		addQ: (method) -> 
+			jmonkey.methodQ.push(method)
+			process.nextTick( ->
+				if(!jmonkey.qStarted)
+					jmonkey.startQ()
+				return
+			);
 			return
-		nextChink: ->
-			jmonkey.working = false;
-			if jmonkey.methodQ.length>0
-				nextMeth = jmonkey.methodQ.shift();
-				methName = nextMeth.method
-				args = nextMeth.args
-				jmonkey[methName].apply(this, args)
-			
+
+		startQ: ->
+			jmonkey.qStarted = true
+			async.eachSeries jmonkey.methodQ, ((item, cb) ->
+				item cb
+				return
+			), (err, results) ->
+				#done
 			return
 	}
 
 
 
 	return jmonkey
-
- newj = new Jmonkey({});
- console.log(newj.prototype)
 
 module.exports = Jmonkey

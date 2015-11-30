@@ -225,61 +225,15 @@
         return jmonkey;
       },
       buildMenu: function() {
-        var newMenuArray, prom;
+        var prom;
         prom = q.defer();
         if ((typeof jmonkey.config_obj.menu === 'undefined') || (jmonkey.config_obj.menu === null) || (jmonkey.config_obj.menu === "auto")) {
           if (jmonkey.auto_generated_menu !== null) {
             prom.resolve(jmonkey.auto_generated_menu);
           } else {
-            newMenuArray = [];
-            filewalker(jmonkey.tmp_source + '/site', {
-              recursive: false
-            }).on('file', function(p, s) {
-              var lr, newP, variables;
-              variables = {};
-              if (p.substr(p.length - 5) === ".jade") {
-                newP = jmonkey.removePrefixOrdering(p, false);
-                lr = new LineByLineReader(jmonkey.tmp_source + '/site/' + p);
-                lr.on('error', function(err) {});
-                lr.on('line', function(line) {
-                  var matches, regex;
-                  if (line.charAt(0) === '-') {
-                    regex = /-(\w+): (.+)/;
-                    matches = [];
-                    if ((matches = regex.exec(line)) !== null) {
-                      if (matches.index === regex.lastIndex) {
-                        regex.lastIndex++;
-                      }
-                      return variables[matches[1].trim()] = matches[2].trim();
-                    }
-                  } else {
-                    return lr.close();
-                  }
-                });
-                return lr.on('end', function() {
-                  var fileName, i, parts;
-                  if (!variables.menuName && newP === 'index.jade') {
-                    variables.menuName = "Home";
-                  } else if (!variables.menuName) {
-                    fileName = newP.substring(0, newP.length - 5);
-                    parts = fileName.split("_");
-                    i = 0;
-                    while (i < parts.length) {
-                      parts[i] = parts[i].toLowerCase().capitalize();
-                      i++;
-                    }
-                    variables.menuName = parts.join(" ");
-                  }
-                  return newMenuArray.push({
-                    "name": variables.menuName,
-                    "href": newP.replace('.jade', '.html')
-                  });
-                });
-              }
-            }).on('done', function() {
-              jmonkey.auto_generated_menu = newMenuArray;
-              return prom.resolve(newMenuArray);
-            }).walk();
+            jmonkey.buildDirMenu(jmonkey.tmp_source + '/site', jmonkey.tmp_source + '/site').then(function(builtArray) {
+              return prom.resolve(builtArray);
+            });
           }
         } else {
           prom.resolve(jmonkey.config_obj.menu);
@@ -326,15 +280,164 @@
         g.resolve(true);
         return g.promise;
       },
+      buildDirMenu: function(dir, root) {
+        var menuArray, prom, todoArray;
+        prom = q.defer();
+        menuArray = [];
+        todoArray = [];
+        filewalker(dir, {
+          recursive: false
+        }).on('file', function(p, s) {
+          todoArray.push(function(asynccb) {
+            var lr, newP, variables;
+            variables = {};
+            if (p.substr(p.length - 5) === ".jade") {
+              newP = jmonkey.removePrefixOrdering(p, false);
+              lr = new LineByLineReader(dir + '/' + p);
+              lr.on('error', function(err) {});
+              lr.on('line', function(line) {
+                var matches, regex;
+                if (line.charAt(0) === '-') {
+                  regex = /-(\w+): (.+)/;
+                  matches = [];
+                  if ((matches = regex.exec(line)) !== null) {
+                    if (matches.index === regex.lastIndex) {
+                      regex.lastIndex++;
+                    }
+                    return variables[matches[1].trim()] = matches[2].trim();
+                  }
+                } else {
+                  return lr.close();
+                }
+              });
+              lr.on('end', function() {
+                var fileName, i, newMenuObject, parts;
+                if (!variables.menuName && newP === 'index.jade' && dir === root) {
+                  variables.menuName = "Home";
+                  variables.href = newP.replace('.jade', '.html');
+                } else if (!variables.menuName && newP === 'index.jade' && dir !== root) {
+
+                } else if (!variables.menuName) {
+                  fileName = newP.substring(0, newP.length - 5);
+                  parts = fileName.split("_");
+                  i = 0;
+                  while (i < parts.length) {
+                    parts[i] = parts[i].toLowerCase().capitalize();
+                    i++;
+                  }
+                  variables.menuName = parts.join(" ");
+                  variables.href = newP.replace('.jade', '.html');
+                }
+                newMenuObject = {};
+                newMenuObject.name = variables.menuName;
+                if (variables.href) {
+                  newMenuObject.href = variables.href;
+                }
+                if (variables.menuName) {
+                  menuArray.push(newMenuObject);
+                }
+                return asynccb();
+              });
+            } else {
+              asynccb();
+            }
+          });
+        }).on('dir', function(p) {
+          return todoArray.push(function(asynccb) {
+            var dirName, i, multi, newMenuObject, parts, potentialIndexFile, variables;
+            multi = false;
+            variables = {};
+            dirName = jmonkey.removePrefixOrdering(p, false);
+            parts = dirName.split("_");
+            if (parts[parts.length - 1] === 'multi') {
+              multi = true;
+              parts.pop();
+            }
+            i = 0;
+            while (i < parts.length) {
+              parts[i] = parts[i].toLowerCase().capitalize();
+              i++;
+            }
+            variables.menuName = parts.join(" ");
+            newMenuObject = {};
+            newMenuObject.name = variables.menuName;
+            potentialIndexFile = dir + '/' + p + '/index.jade';
+            return fs.exists(potentialIndexFile, function(exists) {
+              var lr, newSub;
+              if (exists) {
+                lr = new LineByLineReader(potentialIndexFile);
+                lr.on('error', function(err) {});
+                lr.on('line', function(line) {
+                  var matches, regex;
+                  if (line.charAt(0) === '-') {
+                    regex = /-(\w+): (.+)/;
+                    matches = [];
+                    if ((matches = regex.exec(line)) !== null) {
+                      if (matches.index === regex.lastIndex) {
+                        regex.lastIndex++;
+                      }
+                      return variables[matches[1].trim()] = matches[2].trim();
+                    }
+                  } else {
+                    return lr.close();
+                  }
+                });
+                return lr.on('end', function() {
+                  var newSub;
+                  return newSub = jmonkey.buildDirMenu(dir + '/' + p, root).then(function(response) {
+                    newMenuObject.sub = response;
+                    if (variables.inTop) {
+                      newMenuObject.href = "work out href";
+                    }
+                    if (variables.menuName) {
+                      menuArray.push(newMenuObject);
+                    }
+                    asynccb();
+                    return console.log(newMenuObject);
+                  });
+                });
+              } else {
+                return newSub = jmonkey.buildDirMenu(dir + '/' + p, root).then(function(response) {
+                  newMenuObject.sub = response;
+                  if (variables.menuName) {
+                    menuArray.push(newMenuObject);
+                  }
+                  return asynccb();
+                });
+              }
+            });
+          });
+        }).on('done', function() {
+          return async.eachSeries(todoArray, (function(item, cb) {
+            item(cb);
+          }), function(err, results) {
+            return prom.resolve(menuArray);
+          });
+        }).walk();
+        return prom.promise;
+      },
       removePrefixOrdering: function(p, turnToHtml) {
         var nameParts;
         nameParts = p.split("_");
-        nameParts.shift();
+        if ((nameParts[0].length === 4) && !isNaN(parseInt(nameParts[0][0])) && !isNaN(parseInt(nameParts[0][1])) && !isNaN(parseInt(nameParts[0][2])) && !isNaN(parseInt(nameParts[0][3]))) {
+          nameParts.shift();
+        }
         if (turnToHtml) {
           return nameParts.join("_").replace('.jade', '.html');
         } else {
           return nameParts.join("_");
         }
+      },
+      randomString: function() {
+        var i, possible, text;
+        text = "";
+        possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        i = 0;
+        while (i < 10) {
+          text += possible.charAt(Math.floor(Math.random() * possible.length));
+          i++;
+        }
+        return text;
       },
       addQ: function(method) {
         jmonkey.methodQ.push(method);

@@ -242,62 +242,10 @@ Jmonkey = (obj) ->
 				if jmonkey.auto_generated_menu isnt null
 					prom.resolve(jmonkey.auto_generated_menu)
 				else
-					newMenuArray = []
 					#firs look in the root, to find top level menu items
-					filewalker(jmonkey.tmp_source + '/site', {recursive:false})
-					.on('file', (p, s) ->
-						#first remove the prefixed number for page ordering
-
-						variables = {}
-						if p.substr(p.length - 5)==".jade"
-
-							newP = jmonkey.removePrefixOrdering(p, false);
-							
-							lr = new LineByLineReader(jmonkey.tmp_source + '/site/' + p);
-
-							lr.on('error', (err) ->
-							    # something has gone wrong
-							    #todo: handle this error
-							)
-
-							lr.on('line', (line) -> 
-								if line.charAt(0)=='-'
-									regex = /-(\w+): (.+)/;
-									matches = []
-
-									if ((matches = regex.exec(line)) != null)
-										if (matches.index == regex.lastIndex)
-											regex.lastIndex++;
-										variables[matches[1].trim()] = matches[2].trim()
-								else
-									lr.close()
-							)
-
-							lr.on('end', ->
-								if !variables.menuName && newP == 'index.jade'
-									# we'll just set the name to home	
-									variables.menuName = "Home"
-								else if !variables.menuName
-									# we'll guess the page name
-									fileName =  newP.substring(0, newP.length - 5);
-									parts = fileName.split("_");
-									i = 0
-									while i < parts.length
-										parts[i] = parts[i].toLowerCase().capitalize();
-										i++
-
-									variables.menuName = parts.join(" ")
-								newMenuArray.push({
-									"name": variables.menuName,
-									"href": newP.replace('.jade', '.html')
-								})
-							)
+					jmonkey.buildDirMenu(jmonkey.tmp_source + '/site', jmonkey.tmp_source + '/site').then( (builtArray) ->
+						prom.resolve(builtArray)
 					)
-					.on('done', ->
-						jmonkey.auto_generated_menu = newMenuArray
-						prom.resolve(newMenuArray)
-					)
-					.walk()
 
 					#build menu
 					# pages in the root site dir will be linked from the main menu
@@ -363,14 +311,206 @@ Jmonkey = (obj) ->
 			return g.promise;
 
 
+		buildDirMenu: (dir, root) ->
+			prom = q.defer();
+			menuArray = [];
+			todoArray = [];
+			filewalker(dir, {recursive:false})
+				.on('file', (p, s) ->
+					#first remove the prefixed number for page ordering
+					todoArray.push( (asynccb) ->
+						variables = {}
+						if p.substr(p.length - 5)==".jade"
+							newP = jmonkey.removePrefixOrdering(p, false);
+							
+							lr = new LineByLineReader(dir + '/' + p);
+
+							lr.on('error', (err) ->
+							    # something has gone wrong
+							    #todo: handle this error
+							)
+
+							lr.on('line', (line) -> 
+								if line.charAt(0)=='-'
+									regex = /-(\w+): (.+)/;
+									matches = []
+
+									if ((matches = regex.exec(line)) != null)
+										if (matches.index == regex.lastIndex)
+											regex.lastIndex++;
+										variables[matches[1].trim()] = matches[2].trim()
+								else
+									lr.close()
+							)
+
+							lr.on('end', ->
+								if !variables.menuName && newP == 'index.jade' && dir==root
+									# we'll just set the name to home	
+									variables.menuName = "Home"
+									variables.href = newP.replace('.jade', '.html');
+								else if !variables.menuName && newP == 'index.jade' && dir!=root
+									#we only want to create an href for this if it's inTop var is set to true
+									#if typeof variables.inTop isnt "undefined"
+										#we are a direct link to this page
+									#parts = dir.split("/");
+									#lastPart = parts.pop();
+									#
+									#dirName = jmonkey.removePrefixOrdering(lastPart, false);
+
+									#parts = dirName.split("_");
+									#if parts[parts.length-1]=='multi'
+									#	parts.pop()
+									#i = 0
+									#while i < parts.length
+									#	parts[i] = parts[i].toLowerCase().capitalize();
+									#	i++
+
+									#variables.menuName = parts.join(" ")
+									
+									#jmonkey.removePrefixOrdering(p, false);
+
+								else if !variables.menuName
+									# we'll guess the page name based on the file
+									fileName =  newP.substring(0, newP.length - 5);
+									parts = fileName.split("_");
+									i = 0
+									while i < parts.length
+										parts[i] = parts[i].toLowerCase().capitalize();
+										i++
+
+									variables.menuName = parts.join(" ")
+									variables.href = newP.replace('.jade', '.html')
+
+								newMenuObject = {}
+								newMenuObject.name = variables.menuName;
+								if variables.href
+									newMenuObject.href = variables.href
+								
+								#only push a menu item if it has a name
+								if variables.menuName 
+									menuArray.push(newMenuObject)
+								asynccb();
+							)
+						else
+							asynccb();
+
+						return
+
+					)
+					return 
+				)
+				.on('dir', (p) ->
+					todoArray.push( (asynccb) ->
+						multi = false
+						variables = {}
+						dirName = jmonkey.removePrefixOrdering(p, false);
+
+						parts = dirName.split("_");
+						if parts[parts.length-1]=='multi'
+							multi = true
+							parts.pop()
+						i = 0
+						while i < parts.length
+							parts[i] = parts[i].toLowerCase().capitalize();
+							i++
+
+						variables.menuName = parts.join(" ")
+
+						newMenuObject = {}
+						newMenuObject.name = variables.menuName;
+							
+						#add href to this object, if there's an index
+
+						potentialIndexFile = dir + '/' + p + '/index.jade';
+						fs.exists(potentialIndexFile, (exists) ->
+							if exists
+								lr = new LineByLineReader(potentialIndexFile)
+
+								lr.on('error', (err) ->
+								    # something has gone wrong
+								    #todo: handle this error
+								)
+
+								lr.on('line', (line) -> 
+									if line.charAt(0)=='-'
+										regex = /-(\w+): (.+)/;
+										matches = []
+
+										if ((matches = regex.exec(line)) != null)
+											if (matches.index == regex.lastIndex)
+												regex.lastIndex++;
+											variables[matches[1].trim()] = matches[2].trim()
+									else
+										lr.close()
+
+								);
+								lr.on('end', ->
+									newSub = jmonkey.buildDirMenu(dir + '/' + p, root).then( (response) ->
+										newMenuObject.sub = response
+										if variables.inTop
+											newMenuObject.href = "work out href"
+										if variables.menuName 
+											menuArray.push(newMenuObject)
+
+										asynccb();
+										console.log(newMenuObject);
+									)
+
+								);
+							else
+								newSub = jmonkey.buildDirMenu(dir + '/' + p, root).then( (response) ->
+									newMenuObject.sub = response
+									if variables.menuName 
+										menuArray.push(newMenuObject)
+									asynccb();
+								)
+						)
+
+
+						
+						
+
+						#only push a menu item if it has a name
+						
+
+					)
+				)
+				.on('done', ->
+					async.eachSeries todoArray, ((item, cb) ->
+						item cb
+						return
+					), (err, results) ->
+						#done
+						prom.resolve(menuArray)
+				)
+				.walk()
+
+			return prom.promise
+
+
+
 		removePrefixOrdering: (p, turnToHtml) ->
 			nameParts = p.split("_");
-			nameParts.shift();
+			if (nameParts[0].length==4) && !isNaN(parseInt(nameParts[0][0])) && !isNaN(parseInt(nameParts[0][1])) && !isNaN(parseInt(nameParts[0][2])) && !isNaN(parseInt(nameParts[0][3]))
+				# if the first section is made up of 4 numbers
+				nameParts.shift();
 			if(turnToHtml)
 				return nameParts.join("_").replace('.jade', '.html')
 			else
 				return nameParts.join("_")
 
+
+		randomString: ->
+		
+		    text = "";
+		    possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+		    i = 0;
+		    while i < 10
+		        text += possible.charAt(Math.floor(Math.random() * possible.length));
+		        i++
+		    return text;
+		
 
 		#functions for controlling the syncronous Q
 		addQ: (method) -> 

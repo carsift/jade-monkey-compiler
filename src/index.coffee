@@ -7,6 +7,9 @@ async = require('async')
 rmdir = require('rmdir')
 less = require('less')
 moment = require('moment')
+LineByLineReader = require('line-by-line')
+String.prototype.capitalize = ->
+    return this.replace(/(?:^|\s)\S/g, (a) -> return a.toUpperCase(); );
 
 Jmonkey = (obj) ->
 	jmonkey = {
@@ -153,7 +156,7 @@ Jmonkey = (obj) ->
 								html = fn();
 								#got the jade, now to create/write the file
 								#first get the new path to the file
-								newFileName = p.slice(0, -4) + 'html';
+								newFileName = jmonkey.removePrefixOrdering(p, true);
 								jmonkey.writeFile(jmonkey.dest_dir + '/' + newFileName, html).then(->
 									asynccb()
 								)
@@ -237,19 +240,62 @@ Jmonkey = (obj) ->
 			prom = q.defer();
 			if (typeof jmonkey.config_obj.menu == 'undefined') || (jmonkey.config_obj.menu==null) || (jmonkey.config_obj.menu=="auto")
 				if jmonkey.auto_generated_menu isnt null
-					console.log('already got a menu')
 					prom.resolve(jmonkey.auto_generated_menu)
 				else
 					newMenuArray = []
 					#firs look in the root, to find top level menu items
 					filewalker(jmonkey.tmp_source + '/site', {recursive:false})
 					.on('file', (p, s) ->
-						console.log('got a file')
+						#first remove the prefixed number for page ordering
+
+						variables = {}
 						if p.substr(p.length - 5)==".jade"
-							console.log(p)
+
+							newP = jmonkey.removePrefixOrdering(p, false);
+							
+							lr = new LineByLineReader(jmonkey.tmp_source + '/site/' + p);
+
+							lr.on('error', (err) ->
+							    # something has gone wrong
+							    #todo: handle this error
+							)
+
+							lr.on('line', (line) -> 
+								if line.charAt(0)=='-'
+									regex = /-(\w+): (.+)/;
+									matches = []
+
+									if ((matches = regex.exec(line)) != null)
+										if (matches.index == regex.lastIndex)
+											regex.lastIndex++;
+										variables[matches[1].trim()] = matches[2].trim()
+								else
+									lr.close()
+							)
+
+							lr.on('end', ->
+								if !variables.menuName && newP == 'index.jade'
+									# we'll just set the name to home	
+									variables.menuName = "Home"
+								else if !variables.menuName
+									# we'll guess the page name
+									fileName =  newP.substring(0, newP.length - 5);
+									parts = fileName.split("_");
+									i = 0
+									while i < parts.length
+										parts[i] = parts[i].toLowerCase().capitalize();
+										i++
+
+									variables.menuName = parts.join(" ")
+								newMenuArray.push({
+									"name": variables.menuName,
+									"href": newP.replace('.jade', '.html')
+								})
+							)
 					)
 					.on('done', ->
-						prom.resolve([])
+						jmonkey.auto_generated_menu = newMenuArray
+						prom.resolve(newMenuArray)
 					)
 					.walk()
 
@@ -315,6 +361,15 @@ Jmonkey = (obj) ->
 			g.resolve(true)
 
 			return g.promise;
+
+
+		removePrefixOrdering: (p, turnToHtml) ->
+			nameParts = p.split("_");
+			nameParts.shift();
+			if(turnToHtml)
+				return nameParts.join("_").replace('.jade', '.html')
+			else
+				return nameParts.join("_")
 
 
 		#functions for controlling the syncronous Q

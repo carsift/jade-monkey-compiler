@@ -48,3 +48,4 @@ node_modules
 sftp-config.json
 
 test.js
+*.sublime-project
